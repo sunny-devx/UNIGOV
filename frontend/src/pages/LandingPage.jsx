@@ -62,13 +62,33 @@ export default function LandingPage() {
     if (e) e.preventDefault();
     setLoggingIn(true);
     try {
-      await axios.post('/api/users/login', {
+      const res = await axios.post('/api/users/login', {
         identifier: citizenIdentifier.trim()
       });
+      if (res.data) {
+        localStorage.setItem('unigov_user', JSON.stringify(res.data));
+      }
       navigate('/portal');
     } catch (err) {
       console.error('Login error:', err);
-      // Fallback navigate to portal
+      navigate('/portal');
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
+  const handleQuickDemoLaunch = async (identifier = 'CID-2026-1001') => {
+    setLoggingIn(true);
+    try {
+      const res = await axios.post('/api/users/login', {
+        identifier: identifier
+      });
+      if (res.data) {
+        localStorage.setItem('unigov_user', JSON.stringify(res.data));
+      }
+      navigate('/portal');
+    } catch (err) {
+      console.error('Quick demo launch error:', err);
       navigate('/portal');
     } finally {
       setLoggingIn(false);

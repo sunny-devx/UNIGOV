@@ -17,13 +17,14 @@ public class ApplicationResponse {
     private String formData;
     private String departmentRefNumber;
     private String remarks;
+    private String interopPayload;
     private LocalDateTime appliedAt;
     private LocalDateTime updatedAt;
 
     public ApplicationResponse() {
     }
 
-    public ApplicationResponse(Long id, String trackingNumber, Long userId, Long serviceId, String applicantName, String citizenId, String serviceTitle, String department, String status, String formData, String departmentRefNumber, String remarks, LocalDateTime appliedAt, LocalDateTime updatedAt) {
+    public ApplicationResponse(Long id, String trackingNumber, Long userId, Long serviceId, String applicantName, String citizenId, String serviceTitle, String department, String status, String formData, String departmentRefNumber, String remarks, String interopPayload, LocalDateTime appliedAt, LocalDateTime updatedAt) {
         this.id = id;
         this.trackingNumber = trackingNumber;
         this.userId = userId;
@@ -36,6 +37,7 @@ public class ApplicationResponse {
         this.formData = formData;
         this.departmentRefNumber = departmentRefNumber;
         this.remarks = remarks;
+        this.interopPayload = interopPayload;
         this.appliedAt = appliedAt;
         this.updatedAt = updatedAt;
     }
@@ -55,6 +57,7 @@ public class ApplicationResponse {
                 entity.getFormData(),
                 entity.getDepartmentRefNumber(),
                 entity.getRemarks(),
+                entity.getInteropPayload(),
                 entity.getAppliedAt(),
                 entity.getUpdatedAt()
         );
@@ -154,6 +157,14 @@ public class ApplicationResponse {
 
     public void setRemarks(String remarks) {
         this.remarks = remarks;
+    }
+
+    public String getInteropPayload() {
+        return interopPayload;
+    }
+
+    public void setInteropPayload(String interopPayload) {
+        this.interopPayload = interopPayload;
     }
 
     public LocalDateTime getAppliedAt() {

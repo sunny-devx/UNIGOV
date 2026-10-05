@@ -44,6 +44,9 @@ public class ServiceApplication {
     @Column(name = "remarks", columnDefinition = "TEXT")
     private String remarks;
 
+    @Column(name = "interop_payload", columnDefinition = "TEXT")
+    private String interopPayload;
+
     @Column(name = "applied_at", nullable = false, updatable = false)
     private LocalDateTime appliedAt;
 
@@ -53,7 +56,7 @@ public class ServiceApplication {
     public ServiceApplication() {
     }
 
-    public ServiceApplication(String trackingNumber, Long userId, Long serviceId, String applicantName, String citizenId, String serviceTitle, String department, String status, String formData, String departmentRefNumber, String remarks) {
+    public ServiceApplication(String trackingNumber, Long userId, Long serviceId, String applicantName, String citizenId, String serviceTitle, String department, String status, String formData, String departmentRefNumber, String remarks, String interopPayload) {
         this.trackingNumber = trackingNumber;
         this.userId = userId;
         this.serviceId = serviceId;
@@ -65,6 +68,7 @@ public class ServiceApplication {
         this.formData = formData;
         this.departmentRefNumber = departmentRefNumber;
         this.remarks = remarks;
+        this.interopPayload = interopPayload;
     }
 
     @PrePersist
@@ -180,6 +184,14 @@ public class ServiceApplication {
 
     public void setRemarks(String remarks) {
         this.remarks = remarks;
+    }
+
+    public String getInteropPayload() {
+        return interopPayload;
+    }
+
+    public void setInteropPayload(String interopPayload) {
+        this.interopPayload = interopPayload;
     }
 
     public LocalDateTime getAppliedAt() {

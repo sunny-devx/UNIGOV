@@ -30,9 +30,9 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        // Seed default demo user
+        // Seed default demo citizen (Aarav Sharma)
         User demoUser;
-        if (userRepository.count() == 0) {
+        if (!userRepository.existsByCitizenId("CID-2026-1001")) {
             demoUser = new User(
                     "CID-2026-1001",
                     "Aarav Sharma",
@@ -46,7 +46,23 @@ public class DataInitializer implements CommandLineRunner {
             demoUser = userRepository.save(demoUser);
             log.info("[DATA INIT] Initialized demo citizen Aarav Sharma (CID-2026-1001)");
         } else {
-            demoUser = userRepository.findAll().get(0);
+            demoUser = userRepository.findByCitizenId("CID-2026-1001").orElse(null);
+        }
+
+        // Seed second demo citizen (Priya Verma - Student Persona)
+        if (!userRepository.existsByCitizenId("CID-2026-1002")) {
+            User studentUser = new User(
+                    "CID-2026-1002",
+                    "Priya Verma",
+                    "priya.verma@citizen.unigov.in",
+                    "+91 91234 56789",
+                    "House 12, Indiranagar, 2nd Main",
+                    "Karnataka",
+                    "560038",
+                    "CITIZEN"
+            );
+            userRepository.save(studentUser);
+            log.info("[DATA INIT] Initialized demo citizen Priya Verma (CID-2026-1002)");
         }
 
         // Seed federated government services
@@ -136,6 +152,7 @@ public class DataInitializer implements CommandLineRunner {
         if (applicationRepository.count() == 0 && demoUser != null) {
             GovService s1 = govServiceRepository.findAll().stream().findFirst().orElse(null);
             if (s1 != null) {
+                String sampleInterop = "{\"interopVersion\":\"UNIGOV-INTEROP-v1.0\",\"targetSystem\":\"Revenue & Land Administration\",\"destinationRefId\":\"REV-PORTAL-89104\",\"status\":\"ACCEPTED_BY_DEPARTMENT\"}";
                 ServiceApplication initialApp = new ServiceApplication(
                         "UG-2026-78412",
                         demoUser.getId(),
@@ -147,7 +164,8 @@ public class DataInitializer implements CommandLineRunner {
                         "UNDER_REVIEW",
                         "{\"annualIncome\":\"320000\",\"purpose\":\"Higher Education Scholarship\"}",
                         "REV-PORTAL-89104",
-                        "Interoperability gateway forwarded application to Tahsildar Office. Digital verification passed."
+                        "Interoperability gateway forwarded application to Tahsildar Office. Digital verification passed.",
+                        sampleInterop
                 );
                 applicationRepository.save(initialApp);
                 log.info("[DATA INIT] Initialized demo application (UG-2026-78412)");

@@ -1,5 +1,7 @@
 package gov.sih.unigov.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import gov.sih.unigov.dto.ApplicationRequest;
 import gov.sih.unigov.dto.ApplicationResponse;
 import gov.sih.unigov.entity.GovService;
@@ -24,16 +26,19 @@ public class ApplicationService {
     private final GovServiceRepository govServiceRepository;
     private final UserRepository userRepository;
     private final DepartmentIntegrationService integrationService;
+    private final ObjectMapper objectMapper;
     private final Random random = new Random();
 
     public ApplicationService(ServiceApplicationRepository applicationRepository,
                               GovServiceRepository govServiceRepository,
                               UserRepository userRepository,
-                              DepartmentIntegrationService integrationService) {
+                              DepartmentIntegrationService integrationService,
+                              ObjectMapper objectMapper) {
         this.applicationRepository = applicationRepository;
         this.govServiceRepository = govServiceRepository;
         this.userRepository = userRepository;
         this.integrationService = integrationService;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -75,6 +80,13 @@ public class ApplicationService {
                 request.getFormData()
         );
 
+        String interopPayloadStr = "{}";
+        try {
+            interopPayloadStr = objectMapper.writeValueAsString(interopResult.getTransformedPayload());
+        } catch (JsonProcessingException e) {
+            interopPayloadStr = "{\"error\": \"Payload serialization error\"}";
+        }
+
         // 5. Persist Service Application
         ServiceApplication application = new ServiceApplication(
                 trackingNumber,
@@ -87,7 +99,8 @@ public class ApplicationService {
                 "SUBMITTED",
                 request.getFormData() != null ? request.getFormData() : "{}",
                 interopResult.getDepartmentRefNumber(),
-                request.getRemarks() != null ? request.getRemarks() : "Application submitted via UNIGOV Interoperability Gateway"
+                request.getRemarks() != null ? request.getRemarks() : "Application submitted via UNIGOV Interoperability Gateway",
+                interopPayloadStr
         );
 
         ServiceApplication saved = applicationRepository.save(application);

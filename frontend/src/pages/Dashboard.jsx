@@ -18,20 +18,24 @@ import {
   ExternalLink,
   ChevronRight,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Code,
+  Users,
+  Check,
+  ChevronDown
 } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
 
-  // Current Citizen Profile state
+  // Citizen Profile state
   const [currentUser, setCurrentUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
-  // Platform Stats
+  // Platform Statistics
   const [stats, setStats] = useState(null);
 
-  // Services Catalog
+  // Services Directory
   const [services, setServices] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,35 +57,78 @@ export default function Dashboard() {
   const [submittingApp, setSubmittingApp] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState(null);
 
+  // Interoperability Inspector Modal
+  const [inspectApp, setInspectApp] = useState(null);
+
   // Track Application Search
   const [trackQuery, setTrackQuery] = useState('');
   const [trackedApp, setTrackedApp] = useState(null);
   const [trackError, setTrackError] = useState('');
 
+  // Toast message
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 4000);
+  };
+
+  // Demo personas
+  const personas = [
+    { citizenId: 'CID-2026-1001', name: 'Aarav Sharma', label: 'Aarav Sharma (Delhi NCR — General Citizen)' },
+    { citizenId: 'CID-2026-1002', name: 'Priya Verma', label: 'Priya Verma (Karnataka — Student / Scholarship)' }
+  ];
+
   // Initial load
   useEffect(() => {
-    // 1. Fetch or initialize citizen session
     initCitizenSession();
-    // 2. Fetch platform statistics
     fetchPlatformStats();
-    // 3. Fetch services
     fetchServices();
   }, []);
 
-  const initCitizenSession = async () => {
+  const initCitizenSession = async (overrideIdentifier = null) => {
     setLoadingUser(true);
     try {
-      // Login or get default demo citizen Aarav Sharma
+      let identifier = overrideIdentifier;
+
+      if (!identifier) {
+        // Check localStorage for persisted user
+        const cachedUserStr = localStorage.getItem('unigov_user');
+        if (cachedUserStr) {
+          try {
+            const cached = JSON.parse(cachedUserStr);
+            if (cached && (cached.citizenId || cached.email)) {
+              identifier = cached.citizenId || cached.email;
+            }
+          } catch (e) {
+            console.error('Failed to parse cached user:', e);
+          }
+        }
+      }
+
+      if (!identifier) {
+        identifier = 'CID-2026-1001';
+      }
+
       const res = await axios.post('/api/users/login', {
-        identifier: 'CID-2026-1001'
+        identifier: identifier
       });
+
       setCurrentUser(res.data);
+      localStorage.setItem('unigov_user', JSON.stringify(res.data));
       fetchUserApplications(res.data.citizenId);
     } catch (err) {
       console.error('Failed to load citizen profile:', err);
     } finally {
       setLoadingUser(false);
     }
+  };
+
+  const handleSwitchPersona = async (cid) => {
+    await initCitizenSession(cid);
+    showToast(`Switched active citizen to ${cid}`);
   };
 
   const fetchPlatformStats = async () => {
@@ -117,14 +164,14 @@ export default function Dashboard() {
     }
   };
 
-  const handleAiSearch = async (e) => {
-    if (e) e.preventDefault();
-    if (!aiQuery.trim()) return;
+  const handleAiSearch = async (queryText = null) => {
+    const q = queryText !== null ? queryText : aiQuery;
+    if (!q || !q.trim()) return;
 
     setLoadingAi(true);
     try {
       const res = await axios.post('/api/smart/recommend', {
-        query: aiQuery.trim()
+        query: q.trim()
       });
       setAiResults(res.data);
     } catch (err) {
@@ -132,6 +179,11 @@ export default function Dashboard() {
     } finally {
       setLoadingAi(false);
     }
+  };
+
+  const handlePromptChipClick = (promptText) => {
+    setAiQuery(promptText);
+    handleAiSearch(promptText);
   };
 
   const handleApplyClick = (service) => {
@@ -158,13 +210,14 @@ export default function Dashboard() {
 
       const res = await axios.post('/api/applications', payload);
       setSubmissionSuccess(res.data);
+      showToast(`Application ${res.data.trackingNumber} dispatched to ${res.data.department}!`);
 
       // Refresh applications & stats
       fetchUserApplications(currentUser.citizenId);
       fetchPlatformStats();
     } catch (err) {
       console.error('Application submission failed:', err);
-      alert('Application submission failed. Please try again.');
+      showToast('Application submission failed. Please try again.', 'error');
     } finally {
       setSubmittingApp(false);
     }
@@ -175,16 +228,18 @@ export default function Dashboard() {
     let remarks = 'Interoperability verification completed by department gateway.';
     if (currentStatus === 'SUBMITTED') {
       nextStatus = 'UNDER_REVIEW';
+      remarks = 'Document cross-verification passed. Tahsildar / Officer review initiated.';
     } else if (currentStatus === 'UNDER_REVIEW') {
       nextStatus = 'APPROVED';
-      remarks = 'Final approval granted. Digitally signed certificate/license dispatched.';
+      remarks = 'Final departmental approval granted. Digitally signed certificate/license dispatched.';
     }
 
     try {
-      await axios.patch(`/api/applications/${appId}/status`, {
+      const res = await axios.patch(`/api/applications/${appId}/status`, {
         status: nextStatus,
         remarks: remarks
       });
+      showToast(`Application updated to stage: ${nextStatus}`);
       if (currentUser) {
         fetchUserApplications(currentUser.citizenId);
       }
@@ -195,7 +250,7 @@ export default function Dashboard() {
   };
 
   const handleTrackByNumber = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!trackQuery.trim()) return;
     setTrackError('');
     setTrackedApp(null);
@@ -226,6 +281,20 @@ export default function Dashboard() {
         <div className="absolute bottom-10 left-10 w-[500px] h-[400px] bg-indigo-500/10 blur-[150px] rounded-full" />
       </div>
 
+      {/* Floating Toast Notification */}
+      {toast && (
+        <div className="fixed top-5 right-5 z-50 animate-in slide-in-from-top duration-300">
+          <div className={`px-4 py-3 rounded-xl shadow-2xl border text-xs font-semibold flex items-center space-x-2 ${
+            toast.type === 'error'
+              ? 'bg-rose-950/90 border-rose-500 text-rose-200'
+              : 'bg-teal-950/90 border-teal-500 text-teal-200'
+          }`}>
+            {toast.type === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4 text-teal-400" />}
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      )}
+
       {/* Top Navbar */}
       <header className="relative z-20 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -242,21 +311,31 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center space-x-3">
+            {/* Gateway Status Badge */}
             <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-              <span className="text-slate-400">Gateway:</span>
+              <span className="text-slate-400 hidden sm:inline">Gateway:</span>
               <span className="font-semibold text-emerald-300 font-mono">
                 {stats?.interopGatewayStatus || 'ONLINE'}
               </span>
             </div>
 
-            {currentUser && (
-              <div className="flex items-center space-x-2 px-3 py-1 rounded-lg bg-teal-500/10 border border-teal-500/20 text-xs">
-                <User className="w-3.5 h-3.5 text-teal-400" />
-                <span className="font-semibold text-teal-200">{currentUser.fullName}</span>
-                <span className="text-slate-400 font-mono hidden md:inline">({currentUser.citizenId})</span>
-              </div>
-            )}
+            {/* Persona Switcher Selector for Hackathon Presentation */}
+            <div className="relative">
+              <select
+                aria-label="Active Demo Persona"
+                value={currentUser?.citizenId || 'CID-2026-1001'}
+                onChange={(e) => handleSwitchPersona(e.target.value)}
+                className="appearance-none px-3 py-1.5 pr-8 rounded-lg bg-teal-500/10 border border-teal-500/30 text-xs font-semibold text-teal-200 focus:outline-none focus:border-teal-400 cursor-pointer"
+              >
+                {personas.map((p) => (
+                  <option key={p.citizenId} value={p.citizenId} className="bg-slate-900 text-white">
+                    👤 {p.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-teal-400 absolute right-2.5 top-2.5 pointer-events-none" />
+            </div>
 
             <button
               onClick={() => navigate('/')}
@@ -291,6 +370,7 @@ export default function Dashboard() {
                     <span>Email: <strong className="text-slate-200">{currentUser.email}</strong></span>
                     <span>Phone: <strong className="text-slate-200">{currentUser.phone}</strong></span>
                     <span>State: <strong className="text-slate-200">{currentUser.state}</strong></span>
+                    <span>Address: <strong className="text-slate-200">{currentUser.address}</strong></span>
                   </p>
                 </div>
               </div>
@@ -300,7 +380,7 @@ export default function Dashboard() {
                   <ShieldCheck className="w-5 h-5 text-teal-400 flex-shrink-0" />
                   <div>
                     <span className="font-semibold text-slate-200 block">Unified Interoperability Active</span>
-                    <span className="text-slate-400">Zero duplicate KYC required across departments</span>
+                    <span className="text-slate-400">Zero duplicate KYC required across 6 departments</span>
                   </div>
                 </div>
               </div>
@@ -313,7 +393,7 @@ export default function Dashboard() {
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Federated Services</span>
             <div className="text-2xl font-bold text-white mt-1">{stats?.totalServices || 6}</div>
-            <span className="text-[11px] text-teal-400 font-medium">Across all ministries</span>
+            <span className="text-[11px] text-teal-400 font-medium">Cross-department catalog</span>
           </div>
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Connected Depts</span>
@@ -321,14 +401,14 @@ export default function Dashboard() {
             <span className="text-[11px] text-slate-400">Revenue, Transport, Civil, ULB</span>
           </div>
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Your Applications</span>
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active In PostgreSQL</span>
             <div className="text-2xl font-bold text-white mt-1">{applications.length}</div>
-            <span className="text-[11px] text-slate-400">Live in PostgreSQL</span>
+            <span className="text-[11px] text-slate-400">Tracked for current citizen</span>
           </div>
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Interoperability SLA</span>
             <div className="text-2xl font-bold text-emerald-400 mt-1">100% Real-time</div>
-            <span className="text-[11px] text-emerald-400">Zero data silos</span>
+            <span className="text-[11px] text-emerald-400">Zero manual KYC steps</span>
           </div>
         </div>
 
@@ -342,10 +422,29 @@ export default function Dashboard() {
             Find Services & Check Eligibility Instantly
           </h2>
           <p className="text-xs text-slate-400 mb-4">
-            Type what you need in plain natural language (e.g. <em>"need driving license renewal"</em>, <em>"certificate for college scholarship"</em>, or <em>"ration card for family"</em>).
+            Type what you need in natural language or click a preset prompt chip below:
           </p>
 
-          <form onSubmit={handleAiSearch} className="flex gap-2">
+          {/* Preset Chips for SIH Demo Presentation */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {[
+              { label: '🎓 College Scholarship & Income Certificate', q: 'Income certificate for university college scholarship' },
+              { label: '🚗 Expedited Driving License Renewal', q: 'Renew my expiring driving license' },
+              { label: '🌾 NFSA Priority Family Ration Card', q: 'NFSA subsidized ration card for family quota' },
+              { label: '💧 Domestic Water Supply Sanction', q: 'New domestic drinking water pipeline connection' },
+            ].map((chip, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handlePromptChipClick(chip.q)}
+                className="px-3 py-1.5 rounded-lg bg-slate-950/80 hover:bg-teal-500/10 border border-slate-800 hover:border-teal-500/40 text-xs text-slate-300 hover:text-teal-300 transition-colors"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={(e) => { e.preventDefault(); handleAiSearch(); }} className="flex gap-2">
             <div className="relative flex-grow">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
               <input
@@ -374,7 +473,7 @@ export default function Dashboard() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {aiResults.recommendations.map((item, idx) => (
-                  <div key={idx} className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 text-xs flex flex-col justify-between">
+                  <div key={idx} className="p-3.5 rounded-xl bg-slate-950/70 border border-teal-500/30 text-xs flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-bold text-white text-sm">{item.service.title}</span>
@@ -405,7 +504,7 @@ export default function Dashboard() {
             <div>
               <h2 className="text-xl font-bold text-white">Federated Government Services</h2>
               <p className="text-xs text-slate-400">
-                Connected portals with standardized schema & unified application gateway
+                Connected departmental portals with standardized schema & unified application gateway
               </p>
             </div>
 
@@ -480,12 +579,12 @@ export default function Dashboard() {
         </div>
 
         {/* Real-Time Citizen Applications & Interoperability Journey */}
-        <div className="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 shadow-xl space-y-4">
+        <div className="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 shadow-xl space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-white">Your Interoperability Journey</h2>
               <p className="text-xs text-slate-400">
-                End-to-end tracked lifecycle routed through UNIGOV middleware
+                Live applications routed through the UNIGOV Interoperability Gateway
               </p>
             </div>
 
@@ -527,73 +626,106 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Applications Table */}
+          {/* Applications Visual Flow Cards */}
           {loadingApplications ? (
             <div className="p-6 text-center text-slate-400 text-xs">
               <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-teal-400" />
-              Loading applications...
+              Loading live applications...
             </div>
           ) : applications.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-xs bg-slate-950/40 rounded-xl border border-slate-800/80">
-              No applications submitted yet. Select a service above to experience the unified application flow!
+              No applications submitted yet for this citizen profile. Select a service above to experience the unified application flow!
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold">
-                    <th className="pb-3 px-2">Tracking Number</th>
-                    <th className="pb-3 px-2">Service & Dept</th>
-                    <th className="pb-3 px-2">Dept Ref #</th>
-                    <th className="pb-3 px-2">Applied Date</th>
-                    <th className="pb-3 px-2">Status</th>
-                    <th className="pb-3 px-2 text-right">Demo Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 font-medium">
-                  {applications.map((app) => (
-                    <tr key={app.id} className="hover:bg-slate-800/20">
-                      <td className="py-3 px-2 font-mono font-bold text-teal-300">
-                        {app.trackingNumber}
-                      </td>
-                      <td className="py-3 px-2">
-                        <div className="text-white font-semibold">{app.serviceTitle}</div>
-                        <div className="text-slate-400 text-[11px]">{app.department}</div>
-                      </td>
-                      <td className="py-3 px-2 font-mono text-slate-300 text-[11px]">
-                        {app.departmentRefNumber || 'N/A'}
-                      </td>
-                      <td className="py-3 px-2 text-slate-400 font-mono text-[11px]">
-                        {new Date(app.appliedAt).toLocaleDateString()}
-                      </td>
-                      <td className="py-3 px-2">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                          app.status === 'APPROVED'
-                            ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
-                            : app.status === 'UNDER_REVIEW'
-                            ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
-                            : 'bg-blue-500/10 text-blue-300 border border-blue-500/20'
-                        }`}>
-                          {app.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2 text-right">
+            <div className="space-y-4">
+              {applications.map((app) => {
+                const isUnderReview = app.status === 'UNDER_REVIEW' || app.status === 'APPROVED';
+                const isApproved = app.status === 'APPROVED';
+
+                return (
+                  <div key={app.id} className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-all space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono font-bold text-teal-300 text-sm">{app.trackingNumber}</span>
+                          <span className="text-slate-400 text-xs">•</span>
+                          <span className="text-xs text-slate-300 font-semibold">{app.serviceTitle}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Department: <strong className="text-slate-300">{app.department}</strong> • External Ref: <strong className="text-teal-300 font-mono">{app.departmentRefNumber || 'N/A'}</strong>
+                        </p>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {app.interopPayload && (
+                          <button
+                            onClick={() => setInspectApp(app)}
+                            className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-[11px] flex items-center space-x-1"
+                            title="Inspect canonical-to-department payload"
+                          >
+                            <Code className="w-3 h-3 text-teal-400" />
+                            <span>View Gateway Payload</span>
+                          </button>
+                        )}
+
                         {app.status !== 'APPROVED' ? (
                           <button
                             onClick={() => handleAdvanceStatus(app.id, app.status)}
-                            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-teal-500/20 border border-slate-700 hover:border-teal-500/40 text-slate-300 hover:text-teal-300 text-[11px] transition-colors"
-                            title="Simulate workflow progress for demo review"
+                            className="px-3 py-1 rounded bg-teal-500/20 hover:bg-teal-500/30 border border-teal-500/40 text-teal-300 text-xs font-semibold flex items-center space-x-1 transition-colors"
+                            title="Advance stage for demo reviewers"
                           >
-                            Advance Stage →
+                            <span>Advance Stage</span>
+                            <ArrowRight className="w-3 h-3" />
                           </button>
                         ) : (
-                          <span className="text-emerald-400 text-[11px] font-semibold">Completed</span>
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-xs font-bold flex items-center space-x-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Certificate Dispatched</span>
+                          </span>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+
+                    {/* 4-Stage Visual Stepper */}
+                    <div className="pt-2 border-t border-slate-850">
+                      <div className="grid grid-cols-4 gap-2 text-center text-[10px]">
+                        {/* Step 1 */}
+                        <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+                          <Check className="w-3.5 h-3.5 mx-auto mb-1" />
+                          <span className="font-bold block">1. Form Submitted</span>
+                          <span className="text-[9px] text-slate-400">Canonical UNIGOV KYC</span>
+                        </div>
+                        {/* Step 2 */}
+                        <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+                          <Check className="w-3.5 h-3.5 mx-auto mb-1" />
+                          <span className="font-bold block">2. Interop Routed</span>
+                          <span className="text-[9px] text-slate-400">{app.departmentRefNumber || 'Routed'}</span>
+                        </div>
+                        {/* Step 3 */}
+                        <div className={`p-2 rounded-lg border ${
+                          isUnderReview
+                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                            : 'bg-slate-900 border-slate-800 text-slate-500'
+                        }`}>
+                          {isUnderReview ? <Check className="w-3.5 h-3.5 mx-auto mb-1" /> : <Clock className="w-3.5 h-3.5 mx-auto mb-1 text-slate-500" />}
+                          <span className="font-bold block">3. Officer Review</span>
+                          <span className="text-[9px] text-slate-400">{isUnderReview ? 'In Progress / Passed' : 'Pending'}</span>
+                        </div>
+                        {/* Step 4 */}
+                        <div className={`p-2 rounded-lg border ${
+                          isApproved
+                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                            : 'bg-slate-900 border-slate-800 text-slate-500'
+                        }`}>
+                          {isApproved ? <CheckCircle className="w-3.5 h-3.5 mx-auto mb-1" /> : <Clock className="w-3.5 h-3.5 mx-auto mb-1 text-slate-500" />}
+                          <span className="font-bold block">4. Final Sanction</span>
+                          <span className="text-[9px] text-slate-400">{isApproved ? 'Dispatched' : 'Pending'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -682,7 +814,7 @@ export default function Dashboard() {
                 {/* Specific Application details */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Application Specific Metadata / Details (JSON or Plain Text)
+                    Application Specific Metadata / Details
                   </label>
                   <textarea
                     rows={3}
@@ -738,6 +870,44 @@ export default function Dashboard() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Interoperability Inspector Modal */}
+      {inspectApp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-teal-500/40 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+              <div className="flex items-center space-x-2">
+                <Code className="w-5 h-5 text-teal-400" />
+                <h3 className="text-base font-bold text-white">Gateway Interoperability Payload</h3>
+              </div>
+              <span className="font-mono text-xs text-teal-300 font-bold">{inspectApp.trackingNumber}</span>
+            </div>
+
+            <p className="text-xs text-slate-400 mb-3">
+              This payload proves the SIH26129 canonical data transformation. UNIGOV converts citizen input into the destination department's legacy schema:
+            </p>
+
+            <pre className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-teal-300 font-mono overflow-x-auto max-h-60 mb-4">
+              {(() => {
+                try {
+                  return JSON.stringify(JSON.parse(inspectApp.interopPayload || '{}'), null, 2);
+                } catch (e) {
+                  return inspectApp.interopPayload || 'No payload recorded';
+                }
+              })()}
+            </pre>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setInspectApp(null)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+              >
+                Close Inspector
+              </button>
+            </div>
           </div>
         </div>
       )}
